@@ -1,4 +1,4 @@
-scalaVersion := "2.11.6"
+scalaVersion := "2.11.7"
 
 organization := "com.1on1development"
 
@@ -6,7 +6,7 @@ name := "slick-migration-api-flyway"
 
 version := "0.1"
 
-libraryDependencies += "io.github.nafg" %% "slick-migration-api" % "0.1.1"
+libraryDependencies += "com.github.frossi85" %% "slick-migration-api" % "0.2-SNAPSHOT"
 
 libraryDependencies += "org.flywaydb" % "flyway-core" % "3.0"
 

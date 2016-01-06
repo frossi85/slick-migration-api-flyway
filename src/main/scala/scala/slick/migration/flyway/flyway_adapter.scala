@@ -1,14 +1,15 @@
-package scala.slick
-package migration
+package slick
+package migration.flyway
 
 import java.sql.Connection
 import org.flywaydb.core.api._
 import org.flywaydb.core.api.resolver._
-import scala.slick.migration.api._
-import scala.slick.jdbc.UnmanagedSession
+import slick.migration.api._
 import scala.collection.JavaConverters._
 import org.flywaydb.core.Flyway
-import scala.slick.jdbc.JdbcBackend
+import slick.jdbc.JdbcBackend
+
+
 
 /** The `slick.migration.flyway` package is an adapter between the `Flyway` database migration tool,
  *  and the `slick-migration-api` library.
@@ -56,7 +57,7 @@ package object flyway {
 
 package flyway {
   /** Wraps one or more [[scala.slick.migration.api.Migration]] objects with a version string. */
-  case class VersionedMigration(version: String, migrations: Migration*) extends ResolvedMigration {
+  case class VersionedMigration(version: String, migrations: Migration*)(implicit session : slick.jdbc.JdbcBackend#SessionDef) extends ResolvedMigration {
 
     def getDescription: String = {
       migrations.map {
@@ -67,7 +68,8 @@ package flyway {
 
     def getExecutor: MigrationExecutor = new MigrationExecutor {
       def executeInTransaction = true
-      def execute(c: Connection) = migrations foreach (_.apply()(new UnmanagedSession(c)))
+      //def execute(c: Connection) = migrations foreach (_.apply()(new UnmanagedSession(c)))
+      def execute(c: Connection) = migrations foreach (_.apply())
     }
 
     def getScript: String = migrations.map {
@@ -83,7 +85,7 @@ package flyway {
   }
 
   object VersionedMigration {
-    def apply(version: Int, migrations: Migration*): VersionedMigration =
+    def apply(version: Int, migrations: Migration*)(implicit session : slick.jdbc.JdbcBackend#SessionDef): VersionedMigration =
       VersionedMigration(version.toString, migrations: _*)
   }
 

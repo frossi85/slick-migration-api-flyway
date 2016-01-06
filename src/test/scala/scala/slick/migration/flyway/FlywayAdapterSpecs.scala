@@ -1,13 +1,16 @@
-package scala.slick
+package slick
 package migration.flyway
 
 import org.scalatest.{ FreeSpec, Matchers }
-import scala.slick.driver.H2Driver.simple._
-import scala.slick.migration.api._
+import slick.driver.H2Driver.api._
+import slick.jdbc.JdbcBackend
+import slick.migration.api._
 import org.flywaydb.core.Flyway
-import scala.slick.jdbc.meta.MTable
-import java.sql.Connection
-import scala.slick.jdbc.UnmanagedSession
+import slick.jdbc.meta.MTable
+import slick.migration.flyway.flyway.{VersionedMigration, Resolver, sideEffect}
+import scala.concurrent.Await
+import scala.concurrent.duration.Duration
+import scala.concurrent.ExecutionContext.Implicits.global
 
 class FlywayAdapterSpecs extends FreeSpec with Matchers {
   // note, not using capital letters in the table/column names breaks the test
@@ -23,21 +26,29 @@ class FlywayAdapterSpecs extends FreeSpec with Matchers {
   implicit val dialect = new H2Dialect
 
   case class DBWrap(name: String) {
-    val dbAddress = s"jdbc:h2:mem:$name;DB_CLOSE_DELAY=-1"
+    val dbAddress = s"jdbc:h2:mem:$name"//;DB_CLOSE_DELAY=-1"
     val database = Database.forURL(dbAddress, driver = "org.h2.Driver")
 
-    def tableExists() = database withSession { implicit s =>
-      !MTable.getTables(testTable.baseTableRow.tableName).list.isEmpty
+    implicit lazy val session = database.createSession
+
+    def executeQuerySync[R](a : slick.dbio.DBIOAction[R, slick.dbio.NoStream, scala.Nothing]) : R = {
+      Await.result(database.run(a), Duration.Inf)
     }
-    def tableContents() = database withSession {
-      implicit s => testTable.list
-    }
+
+    def getTable(name: String)(implicit session: JdbcBackend#Session) =
+      executeQuerySync(MTable.getTables(name).map(x => x.toList)).find(_.name.name == name)
+
+    def tableExists() = getTable(testTable.baseTableRow.tableName).isDefined
+
+    def tableContents() = executeQuerySync(testTable.result)
   }
 
   "The flyway/slick migrations adapter" - {
     "apply slick migrations via a flyway object" in {
       val db = DBWrap("slick_migrate")
       import db._
+
+      implicit lazy val session = db.session
 
       val m1 = TableMigration(testTable)
         .create
@@ -47,7 +58,7 @@ class FlywayAdapterSpecs extends FreeSpec with Matchers {
 
       val migration1 = VersionedMigration("1", m1, m2)
 
-      val m3 = TableMigration(testTable)
+     val m3 = TableMigration(testTable)
         .addColumns(_.col3)
 
       val m4 = SqlMigration("insert into testtable (col1, col2, col3) values (10, 20, 30)")
